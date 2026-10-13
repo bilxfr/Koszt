@@ -14,6 +14,8 @@
     <title>Kalkulator Kosztów Życia – PWA</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tesseract.js OCR Engine for Receipt Scanning -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Google Fonts: Inter & JetBrains Mono -->
@@ -139,6 +141,10 @@
                     <button onclick="openCategoryModal()" class="mat-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold" title="Nowa własna tabela / kategoria">
                         <i class="fa-solid fa-folder-plus text-purple-400"></i>
                         <span class="hidden sm:inline">+ Własna tabela</span>
+                    </button>
+                    <button onclick="openReceiptScannerModal()" class="mat-btn flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs shadow-md shadow-amber-500/20" title="Zeskanuj paragon aparatem">
+                        <i class="fa-solid fa-camera"></i>
+                        <span>Skanuj paragon</span>
                     </button>
                     <button onclick="openEntryModal()" class="mat-btn flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/20">
                         <i class="fa-solid fa-plus"></i>
@@ -625,7 +631,10 @@
 
     </main>
 
-    <!-- FLOATING ACTION BUTTON (MOBILE) -->
+    <!-- FLOATING ACTION BUTTONS (MOBILE: CAMERA + ADD) -->
+    <button onclick="openReceiptScannerModal()" aria-label="Zeskanuj paragon aparatem" class="md:hidden fixed right-4 bottom-36 z-30 w-14 h-14 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-xl shadow-amber-500/30 flex items-center justify-center text-xl mat-btn border-2 border-white" title="Skanuj paragon">
+        <i class="fa-solid fa-camera"></i>
+    </button>
     <button onclick="openEntryModal()" aria-label="Dodaj nową pozycję" class="md:hidden fixed right-4 bottom-20 z-30 w-14 h-14 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 shadow-xl shadow-emerald-600/30 flex items-center justify-center text-xl mat-btn border-2 border-white">
         <i class="fa-solid fa-plus"></i>
     </button>
@@ -923,6 +932,198 @@
                 <button id="confirmActionBtn" class="mat-btn flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm shadow-md">
                     Potwierdź
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 5: RECEIPT SCANNER (APARAT + OCR/AI) -->
+    <!-- ========================================== -->
+    <div id="receiptScannerModal" class="fixed inset-0 z-50 hidden bg-slate-900/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="bg-white w-full sm:max-w-xl rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-slide-up max-h-[94vh] flex flex-col">
+            <!-- Header -->
+            <div class="px-5 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-amber-400/20 text-amber-400 flex items-center justify-center">
+                        <i class="fa-solid fa-camera text-base"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-extrabold text-base">Skaner Paragonów (Aparat)</h3>
+                        <p class="text-[11px] text-slate-400">Zrób zdjęcie paragonu, aby automatycznie odczytać kwotę i sklep</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="toggleScannerAiSettings()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-[11px] font-bold flex items-center gap-1" title="Ustawienia silnika AI">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <span>Tryb AI</span>
+                    </button>
+                    <button type="button" onclick="closeReceiptScannerModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div class="p-4 sm:p-5 space-y-4 overflow-y-auto text-xs sm:text-sm flex-1">
+
+                <!-- Optional Gemini AI Key Box (Hidden by default) -->
+                <div id="scannerAiSettingsBox" class="hidden p-3.5 rounded-2xl bg-slate-900 text-white space-y-2.5 border border-slate-700">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-xs text-amber-300 flex items-center gap-1.5">
+                            <i class="fa-solid fa-robot"></i> Opcjonalny klucz Google Gemini AI (100% precyzji)
+                        </span>
+                        <span id="aiKeyStatusBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">Tryb lokalny OCR</span>
+                    </div>
+                    <p class="text-[11px] text-slate-300 leading-relaxed">
+                        Domyślnie skaner działa <strong>całkowicie za darmo i bez klucza</strong> (silnik OCR Tesseract w telefonie). Jeśli jednak chcesz rozbijać trudne/pogniecione paragony przez sztuczną inteligencję Gemini Vision, możesz wkleić darmowy klucz API z Google AI Studio:
+                    </p>
+                    <div class="flex gap-2">
+                        <input type="password" id="geminiApiKeyInput" placeholder="Wklej klucz AIzaSy..." class="flex-1 rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400">
+                        <button type="button" onclick="saveGeminiApiKey()" class="mat-btn px-3.5 py-2 rounded-xl bg-amber-400 text-slate-950 font-extrabold text-xs">
+                            Zapisz
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Hidden File Inputs for Native Camera & Gallery -->
+                <input type="file" id="receiptCameraInput" accept="image/*" capture="environment" class="hidden" onchange="handleReceiptFileSelect(event)">
+                <input type="file" id="receiptGalleryInput" accept="image/*" class="hidden" onchange="handleReceiptFileSelect(event)">
+
+                <!-- Capture Action Buttons -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <button type="button" onclick="document.getElementById('receiptCameraInput').click()" class="mat-btn py-3 px-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold flex items-center justify-center gap-2 shadow-md shadow-amber-500/15">
+                        <i class="fa-solid fa-camera text-base"></i>
+                        <span>Aparat (Zrób zdjęcie)</span>
+                    </button>
+
+                    <button type="button" onclick="document.getElementById('receiptGalleryInput').click()" class="mat-btn py-3 px-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold flex items-center justify-center gap-2 border border-slate-300">
+                        <i class="fa-regular fa-image text-base text-blue-600"></i>
+                        <span>Wybierz z galerii</span>
+                    </button>
+
+                    <button type="button" onclick="startLiveCameraStream()" id="btnStartLiveCam" class="mat-btn py-3 px-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold flex items-center justify-center gap-2 border border-slate-300">
+                        <i class="fa-solid fa-video text-base text-emerald-600"></i>
+                        <span>Kamera na żywo</span>
+                    </button>
+                </div>
+
+                <!-- Live Camera Stream Box (When using WebRTC in-app viewfinder) -->
+                <div id="liveCameraContainer" class="hidden rounded-2xl overflow-hidden bg-black relative border-2 border-amber-400">
+                    <video id="liveCameraVideo" autoplay playsinline muted class="w-full max-h-72 object-cover"></video>
+                    <!-- Receipt framing guide overlay -->
+                    <div class="absolute inset-4 border-2 border-dashed border-amber-400/70 rounded-xl pointer-events-none flex items-end justify-center pb-2">
+                        <span class="bg-black/60 text-amber-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full">Nakieruj na kwotę SUMA PLN na paragonie</span>
+                    </div>
+                    <div class="p-3 bg-slate-900 flex items-center justify-between gap-2">
+                        <button type="button" onclick="stopLiveCameraStream()" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs">
+                            Zamknij podgląd
+                        </button>
+                        <button type="button" onclick="captureFrameFromLiveCamera()" class="mat-btn flex-1 py-2.5 rounded-xl bg-amber-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-camera"></i> Uchwyć i zeskanuj paragon
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Scanning Progress & Image Preview -->
+                <div id="scanProgressSection" class="hidden p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                    <div class="flex items-center gap-3">
+                        <img id="receiptPreviewThumb" src="" alt="Podgląd paragonu" class="w-16 h-20 object-cover rounded-xl border border-slate-300 bg-white shrink-0">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between mb-1">
+                                <span id="scanStatusTitle" class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-spinner fa-spin text-blue-600"></i> Analizowanie paragonu...
+                                </span>
+                                <span id="scanProgressPct" class="font-num font-bold text-xs text-blue-600">0%</span>
+                            </div>
+                            <div class="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                                <div id="scanProgressBar" class="bg-blue-600 h-full transition-all duration-200" style="width: 5%"></div>
+                            </div>
+                            <p id="scanStatusSubtitle" class="text-[11px] text-slate-500 mt-1.5 truncate">
+                                Wyostrzanie obrazu i wyszukiwanie pozycji SUMA PLN...
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scan Result Form (Editable before adding to budget) -->
+                <form id="scannedResultForm" onsubmit="saveScannedReceiptExpense(event)" class="hidden space-y-3.5 pt-2 border-t border-slate-200">
+                    <div class="flex items-center justify-between bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl">
+                        <span class="font-bold text-xs text-emerald-900 flex items-center gap-1.5">
+                            <i class="fa-solid fa-circle-check text-emerald-600"></i> Dane odczytane z paragonu (możesz je edytować)
+                        </span>
+                        <span id="detectedStoreBadge" class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-emerald-200/70 text-emerald-900">Paragon</span>
+                    </div>
+
+                    <!-- Mode switcher: Whole receipt vs Individual items (shown when multiple items found) -->
+                    <div id="scanImportModeWrapper" class="hidden grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+                        <button type="button" id="btnImportModeSingle" onclick="setReceiptImportMode('single')" class="py-1.5 px-2 rounded-lg font-bold text-xs bg-white text-slate-900 shadow-xs">
+                            1 łączna kwota (SUMA)
+                        </button>
+                        <button type="button" id="btnImportModeItems" onclick="setReceiptImportMode('items')" class="py-1.5 px-2 rounded-lg font-semibold text-xs text-slate-600">
+                            Poszczególne produkty (<span id="detectedItemsCount">0</span>)
+                        </button>
+                    </div>
+
+                    <!-- Single Total Mode Fields -->
+                    <div id="singleReceiptFields" class="space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                            <div class="sm:col-span-5">
+                                <label for="scannedAmountInput" class="block font-bold text-slate-700 mb-1">Kwota z paragonu (zł):</label>
+                                <div class="relative">
+                                    <input type="number" id="scannedAmountInput" required min="0.01" step="0.01" placeholder="0.00" class="w-full rounded-xl border-2 border-emerald-500 bg-emerald-50/30 pl-3.5 pr-10 py-2.5 font-extrabold font-num text-base text-slate-900 focus:outline-none focus:border-blue-600">
+                                    <span class="absolute right-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400">zł</span>
+                                </div>
+                            </div>
+                            <div class="sm:col-span-7">
+                                <label for="scannedNameInput" class="block font-bold text-slate-700 mb-1">Nazwa wydatku / Sklep:</label>
+                                <input type="text" id="scannedNameInput" required placeholder="np. Paragon: Biedronka" class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 font-semibold text-slate-900 focus:outline-none focus:border-blue-600">
+                            </div>
+                        </div>
+
+                        <!-- Quick clickable chips of other amounts found on the receipt -->
+                        <div id="otherDetectedAmountsBox" class="hidden">
+                            <span class="block text-[11px] font-semibold text-slate-500 mb-1">Inne kwoty wykryte na paragonie (dotknij, aby podmienić):</span>
+                            <div id="otherDetectedAmountsChips" class="flex items-center gap-1.5 flex-wrap"></div>
+                        </div>
+                    </div>
+
+                    <!-- Multi-Items Mode List (Hidden unless switched) -->
+                    <div id="multiItemsReceiptFields" class="hidden space-y-2 max-h-48 overflow-y-auto p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                        <p class="text-[11px] font-semibold text-slate-500">Zaznacz pozycje z paragonu, które chcesz dodać osobno do tabeli:</p>
+                        <div id="scannedItemsChecklist" class="space-y-1.5"></div>
+                    </div>
+
+                    <!-- Common fields: Target Table & Date & Mode -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label for="scannedCategorySelect" class="block font-bold text-slate-700 mb-1">Dodaj do tabeli:</label>
+                            <select id="scannedCategorySelect" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 font-bold text-slate-800">
+                                <!-- Populated via JS -->
+                            </select>
+                        </div>
+                        <div>
+                            <label for="scannedDateInput" class="block font-bold text-slate-700 mb-1">Data paragonu (Jednorazowe):</label>
+                            <input type="date" id="scannedDateInput" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 font-num font-bold text-slate-800">
+                        </div>
+                    </div>
+
+                    <!-- Raw OCR text preview (collapsible) -->
+                    <details class="text-[11px] text-slate-500 bg-slate-50 rounded-xl p-2.5 border border-slate-200">
+                        <summary class="cursor-pointer font-semibold text-slate-600">Pokaż pełny odczytany tekst z paragonu (OCR)</summary>
+                        <pre id="rawOcrTextOutput" class="mt-2 whitespace-pre-wrap font-mono text-[10px] text-slate-600 max-h-32 overflow-y-auto"></pre>
+                    </details>
+
+                    <div class="flex items-center gap-2.5 pt-2">
+                        <button type="button" onclick="closeReceiptScannerModal()" class="mat-btn flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold">
+                            Anuluj
+                        </button>
+                        <button type="submit" class="mat-btn flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-check"></i>
+                            <span>Dodaj wydatek do tabeli</span>
+                        </button>
+                    </div>
+                </form>
+
             </div>
         </div>
     </div>
@@ -2469,6 +2670,548 @@
             } catch (e) {
                 console.warn('PWA init warning:', e);
             }
+        }
+
+        // ==========================================================
+        // SKANER PARAGONÓW (APARAT + OCR TESSERACT + GEMINI VISION)
+        // ==========================================================
+        const GEMINI_KEY_STORAGE = 'kalkulator_kosztow_gemini_api_key';
+        let liveCameraStream = null;
+        let currentReceiptImportMode = 'single';
+        let currentDetectedLineItems = [];
+
+        const POLISH_STORES_DB = [
+            { keywords: ['biedronka', 'jeronimo', 'martins'], name: 'Biedronka', categoryId: 'food' },
+            { keywords: ['lidl'], name: 'Lidl', categoryId: 'food' },
+            { keywords: ['żabka', 'zabka'], name: 'Żabka', categoryId: 'food' },
+            { keywords: ['kaufland'], name: 'Kaufland', categoryId: 'food' },
+            { keywords: ['auchan'], name: 'Auchan', categoryId: 'food' },
+            { keywords: ['carrefour'], name: 'Carrefour', categoryId: 'food' },
+            { keywords: ['dino'], name: 'Dino', categoryId: 'food' },
+            { keywords: ['netto'], name: 'Netto', categoryId: 'food' },
+            { keywords: ['stokrotka'], name: 'Stokrotka', categoryId: 'food' },
+            { keywords: ['lewiatan'], name: 'Lewiatan', categoryId: 'food' },
+            { keywords: ['intermarche', 'intermarché'], name: 'Intermarché', categoryId: 'food' },
+            { keywords: ['delikatesy centrum'], name: 'Delikatesy Centrum', categoryId: 'food' },
+            { keywords: ['piekarnia', 'cukiernia', 'putka', 'oskroba'], name: 'Piekarnia / Cukiernia', categoryId: 'food' },
+            { keywords: ['mcdonald', 'kfc', 'burger king', 'pizzeria', 'restauracja', 'kebab', 'bistro'], name: 'Jedzenie na mieście', categoryId: 'food' },
+            { keywords: ['rossmann'], name: 'Rossmann (Chemia i Dom)', categoryId: 'home' },
+            { keywords: ['hebe'], name: 'Hebe', categoryId: 'home' },
+            { keywords: ['castorama'], name: 'Castorama (Dom)', categoryId: 'home' },
+            { keywords: ['leroy', 'merlin'], name: 'Leroy Merlin (Dom)', categoryId: 'home' },
+            { keywords: ['ikea'], name: 'IKEA (Dom)', categoryId: 'home' },
+            { keywords: ['obi'], name: 'OBI (Dom)', categoryId: 'home' },
+            { keywords: ['action'], name: 'Action (Dom)', categoryId: 'home' },
+            { keywords: ['pepco'], name: 'Pepco (Dom)', categoryId: 'home' },
+            { keywords: ['tedi'], name: 'TEDi', categoryId: 'home' },
+            { keywords: ['orlen', 'pkn orlen'], name: 'Stacja Paliw Orlen', categoryId: 'custom' },
+            { keywords: ['circle k', 'circle-k'], name: 'Stacja Paliw Circle K', categoryId: 'custom' },
+            { keywords: ['shell'], name: 'Stacja Paliw Shell', categoryId: 'custom' },
+            { keywords: ['bp ', 'bp europa', 'moya', 'amic'], name: 'Stacja Paliw', categoryId: 'custom' },
+            { keywords: ['apteka', 'doz ', 'ziko', 'super-pharm'], name: 'Apteka / Zdrowie', categoryId: 'custom' }
+        ];
+
+        function populateScannerCategorySelect(selectedCatId = 'food') {
+            const sel = document.getElementById('scannedCategorySelect');
+            if (!sel) return;
+            sel.innerHTML = currentState.categories
+                .filter(c => c.id !== 'income')
+                .map(c => `<option value="${c.id}" ${c.id === selectedCatId ? 'selected' : ''}>${escapeHtml(c.name)}</option>`)
+                .join('');
+        }
+
+        function openReceiptScannerModal() {
+            populateScannerCategorySelect('food');
+            const savedKey = localStorage.getItem(GEMINI_KEY_STORAGE) || '';
+            const keyInput = document.getElementById('geminiApiKeyInput');
+            if (keyInput) keyInput.value = savedKey;
+            updateAiKeyBadge();
+
+            // Set default date to today if in selected month, or 15th of selected month
+            const now = new Date();
+            let defaultDate = getSelectedMonthDefaultDateStr(String(now.getDate()).padStart(2, '0'));
+            document.getElementById('scannedDateInput').value = defaultDate;
+
+            document.getElementById('receiptScannerModal').classList.remove('hidden');
+        }
+
+        function closeReceiptScannerModal() {
+            stopLiveCameraStream();
+            document.getElementById('receiptScannerModal').classList.add('hidden');
+        }
+
+        function toggleScannerAiSettings() {
+            const box = document.getElementById('scannerAiSettingsBox');
+            box.classList.toggle('hidden');
+        }
+
+        function updateAiKeyBadge() {
+            const key = localStorage.getItem(GEMINI_KEY_STORAGE) || '';
+            const badge = document.getElementById('aiKeyStatusBadge');
+            if (!badge) return;
+            if (key.trim().length > 10) {
+                badge.textContent = 'Aktywny: Gemini Vision AI';
+                badge.className = 'text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold';
+            } else {
+                badge.textContent = 'Tryb lokalny OCR (Darmowy)';
+                badge.className = 'text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300';
+            }
+        }
+
+        function saveGeminiApiKey() {
+            const val = document.getElementById('geminiApiKeyInput').value.trim();
+            if (val) {
+                localStorage.setItem(GEMINI_KEY_STORAGE, val);
+                showToast('Zapisano klucz Gemini AI do skanowania paragonów!', 'success');
+            } else {
+                localStorage.removeItem(GEMINI_KEY_STORAGE);
+                showToast('Usunięto klucz AI – aktywny wbudowany darmowy skaner OCR', 'info');
+            }
+            updateAiKeyBadge();
+            document.getElementById('scannerAiSettingsBox').classList.add('hidden');
+        }
+
+        async function startLiveCameraStream() {
+            const container = document.getElementById('liveCameraContainer');
+            const video = document.getElementById('liveCameraVideo');
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    showToast('Użyj przycisku „Aparat (Zrób zdjęcie)” powyżej', 'info');
+                    document.getElementById('receiptCameraInput').click();
+                    return;
+                }
+                liveCameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    },
+                    audio: false
+                });
+                video.srcObject = liveCameraStream;
+                container.classList.remove('hidden');
+            } catch (err) {
+                console.warn('Camera stream fallback:', err);
+                document.getElementById('receiptCameraInput').click();
+            }
+        }
+
+        function stopLiveCameraStream() {
+            if (liveCameraStream) {
+                liveCameraStream.getTracks().forEach(track => track.stop());
+                liveCameraStream = null;
+            }
+            const container = document.getElementById('liveCameraContainer');
+            if (container) container.classList.add('hidden');
+        }
+
+        function captureFrameFromLiveCamera() {
+            const video = document.getElementById('liveCameraVideo');
+            if (!video || !video.videoWidth) return;
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            stopLiveCameraStream();
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+            processReceiptImageDataUrl(dataUrl);
+        }
+
+        function handleReceiptFileSelect(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            stopLiveCameraStream();
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                processReceiptImageDataUrl(e.target.result);
+            };
+            reader.readAsDataURL(file);
+            event.target.value = '';
+        }
+
+        // Preprocesses receipt photo (resizes + increases contrast for crisp OCR on thermal paper)
+        function preprocessReceiptImage(dataUrl) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const maxDim = 1800;
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > maxDim || h > maxDim) {
+                        if (w > h) {
+                            h = Math.round((h * maxDim) / w);
+                            w = maxDim;
+                        } else {
+                            w = Math.round((w * maxDim) / h);
+                            h = maxDim;
+                        }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+
+                    // Enhance contrast & convert to clean high-contrast grayscale for Tesseract
+                    const imgData = ctx.getImageData(0, 0, w, h);
+                    const d = imgData.data;
+                    const contrast = 1.45;
+                    const intercept = 128 * (1 - contrast);
+                    for (let i = 0; i < d.length; i += 4) {
+                        const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+                        let c = gray * contrast + intercept;
+                        c = Math.max(0, Math.min(255, c));
+                        d[i] = d[i + 1] = d[i + 2] = c;
+                    }
+                    ctx.putImageData(imgData, 0, 0);
+                    resolve(canvas.toDataURL('image/jpeg', 0.9));
+                };
+                img.onerror = () => resolve(dataUrl);
+                img.src = dataUrl;
+            });
+        }
+
+        function setScanProgress(pct, title, subtitle) {
+            document.getElementById('scanProgressSection').classList.remove('hidden');
+            document.getElementById('scanProgressBar').style.width = `${Math.max(5, Math.min(100, pct))}%`;
+            document.getElementById('scanProgressPct').textContent = `${Math.round(pct)}%`;
+            if (title) document.getElementById('scanStatusTitle').innerHTML = title;
+            if (subtitle) document.getElementById('scanStatusSubtitle').textContent = subtitle;
+        }
+
+        async function processReceiptImageDataUrl(rawDataUrl) {
+            document.getElementById('receiptPreviewThumb').src = rawDataUrl;
+            document.getElementById('scannedResultForm').classList.add('hidden');
+            setScanProgress(10, '<i class="fa-solid fa-spinner fa-spin text-blue-600"></i> Przygotowywanie zdjęcia paragonu...', 'Wyostrzanie druku fiskalnego...');
+
+            const apiKey = (localStorage.getItem(GEMINI_KEY_STORAGE) || '').trim();
+            if (apiKey.length > 10) {
+                const aiSuccess = await tryScanWithGeminiAI(rawDataUrl, apiKey);
+                if (aiSuccess) return;
+            }
+
+            // Default: Local in-browser OCR via Tesseract.js (Polish + English)
+            try {
+                const processedDataUrl = await preprocessReceiptImage(rawDataUrl);
+                setScanProgress(20, '<i class="fa-solid fa-spinner fa-spin text-blue-600"></i> Uruchamianie silnika OCR (Polski)...', 'Pobieranie słownika i odczyt tekstu...');
+
+                if (typeof Tesseract === 'undefined') {
+                    throw new Error('Brak biblioteki Tesseract (sprawdź połączenie z internetem)');
+                }
+
+                const result = await Tesseract.recognize(processedDataUrl, 'pol', {
+                    logger: (m) => {
+                        if (m.status === 'recognizing text' && typeof m.progress === 'number') {
+                            const p = 25 + Math.round(m.progress * 70);
+                            setScanProgress(p, '<i class="fa-solid fa-spinner fa-spin text-blue-600"></i> Odczytywanie kwot z paragonu...', 'Analiza wierszy i sekcji SUMA PLN...');
+                        }
+                    }
+                });
+
+                const rawText = (result && result.data && result.data.text) ? result.data.text : '';
+                const parsed = parsePolishReceiptText(rawText);
+                displayParsedReceiptResult(parsed, rawText, 'OCR Lokalny');
+            } catch (err) {
+                console.error('OCR Error:', err);
+                setScanProgress(100, '<i class="fa-solid fa-circle-exclamation text-amber-600"></i> Wpisz kwotę ręcznie (podgląd gotowy)', 'Nie udało się automatycznie odczytać druku – uzupełnij kwotę poniżej.');
+                displayParsedReceiptResult({
+                    storeName: 'Zakupy z paragonu',
+                    categoryId: 'food',
+                    totalAmount: '',
+                    otherAmounts: [],
+                    dateStr: '',
+                    items: []
+                }, '', 'Ręczna korekta');
+            }
+        }
+
+        async function tryScanWithGeminiAI(dataUrl, apiKey) {
+            try {
+                setScanProgress(35, '<i class="fa-solid fa-wand-magic-sparkles fa-spin text-amber-500"></i> Analiza paragonu przez Gemini Vision AI...', 'Rozpoznawanie sklepu, sumy i produktów...');
+                const base64Data = dataUrl.split(',')[1];
+                const mimeType = dataUrl.substring(dataUrl.indexOf(':') + 1, dataUrl.indexOf(';')) || 'image/jpeg';
+
+                const prompt = `Przeanalizuj zdjęcie polskiego paragonu fiskalnego i zwróć WYŁĄCZNIE poprawny obiekt JSON (bez znaczników markdown) w formacie:
+{
+  "storeName": "Nazwa sklepu np. Biedronka, Lidl, Orlen, Rossmann",
+  "categoryId": "food (jedzenie/spożywcze) LUB home (dom/chemia/remont) LUB custom (paliwo/apteka/inne)",
+  "totalAmount": 0.00,
+  "dateStr": "YYYY-MM-DD (lub pusty ciąg jeśli brak)",
+  "items": [
+    {"name": "Nazwa produktu z paragonu", "price": 0.00}
+  ]
+}`;
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: prompt },
+                                { inline_data: { mime_type: mimeType, data: base64Data } }
+                            ]
+                        }],
+                        generationConfig: {
+                            response_mime_type: "application/json"
+                        }
+                    })
+                });
+
+                if (!response.ok) throw new Error('API status ' + response.status);
+                const data = await response.json();
+                const textOut = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                const cleanedJson = textOut.replace(/```json|```/g, '').trim();
+                const aiObj = JSON.parse(cleanedJson);
+
+                const parsed = {
+                    storeName: aiObj.storeName ? `Paragon: ${aiObj.storeName}` : 'Zakupy z paragonu',
+                    categoryId: ['food', 'home', 'custom'].includes(aiObj.categoryId) ? aiObj.categoryId : 'food',
+                    totalAmount: Number(aiObj.totalAmount) || '',
+                    otherAmounts: [],
+                    dateStr: aiObj.dateStr || '',
+                    items: Array.isArray(aiObj.items) ? aiObj.items : []
+                };
+                displayParsedReceiptResult(parsed, JSON.stringify(aiObj, null, 2), 'Gemini Vision AI');
+                return true;
+            } catch (e) {
+                console.warn('Gemini AI fallback to local OCR:', e);
+                return false;
+            }
+        }
+
+        // Intelligent Polish Fiscal Receipt Parser
+        function parsePolishReceiptText(rawText) {
+            const text = String(rawText || '');
+            const lower = text.toLowerCase();
+            const lines = text.split(/?
+/).map(l => l.trim()).filter(Boolean);
+
+            // 1. Detect Store Name & Category
+            let detectedStore = 'Zakupy z paragonu';
+            let detectedCategory = 'food';
+            for (const store of POLISH_STORES_DB) {
+                if (store.keywords.some(kw => lower.includes(kw))) {
+                    detectedStore = `Paragon: ${store.name}`;
+                    detectedCategory = store.categoryId;
+                    break;
+                }
+            }
+
+            // 2. Detect Receipt Date (YYYY-MM-DD or DD-MM-YYYY or DD.MM.YYYY)
+            let detectedDate = '';
+            const isoMatch = text.match(/(202[4-9])[-./](0[1-9]|1[0-2])[-./](0[1-9]|[12]\d|3[01])/);
+            const dmyMatch = text.match(/(0[1-9]|[12]\d|3[01])[-./](0[1-9]|1[0-2])[-./](202[4-9])/);
+            if (isoMatch) {
+                detectedDate = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+            } else if (dmyMatch) {
+                detectedDate = `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}`;
+            }
+
+            // 3. Extract Total Amount (SUMA PLN / DO ZAPŁATY / RAZEM / KWOTA)
+            const totalKeywords = ['suma pln', 'suma:', 'suma ', 'do zapłaty', 'do zaplaty', 'razem', 'wartość', 'wartosc', 'płatność', 'platnosc', 'karta', 'gotówka', 'gotowka'];
+            let primaryTotal = null;
+            const allAmountsSet = new Set();
+
+            // Helper to extract decimal prices like 12,99 or 145.50 from a line
+            const extractPricesFromLine = (line) => {
+                const normalized = line.replace(/(\d)\s+[,.]\s*(\d{2})/g, '$1,$2');
+                const matches = [...normalized.matchAll(/(\d{1,5})[,.](\d{2})/g)];
+                return matches.map(m => parseFloat(`${m[1]}.${m[2]}`)).filter(v => v > 0 && v < 50000 && ![2024, 2025, 2026, 2027, 23.00, 8.00, 5.00].includes(v));
+            };
+
+            const detectedItems = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const lLow = line.toLowerCase();
+                const prices = extractPricesFromLine(line);
+                prices.forEach(p => allAmountsSet.add(p.toFixed(2)));
+
+                // Check if this line is the SUMA PLN line
+                if (totalKeywords.some(kw => lLow.includes(kw))) {
+                    if (prices.length > 0 && primaryTotal === null) {
+                        primaryTotal = Math.max(...prices);
+                    } else if (prices.length === 0 && i + 1 < lines.length && primaryTotal === null) {
+                        const nextPrices = extractPricesFromLine(lines[i + 1]);
+                        if (nextPrices.length > 0) primaryTotal = Math.max(...nextPrices);
+                    }
+                } else if (prices.length > 0) {
+                    // Check if it looks like a product line item (has letters and ends with a price)
+                    const cleanName = line.replace(/\d+[,.]\d{2}.*$/, '').replace(/[*xX]\s*\d+([,.]\d+)?.*$/, '').trim();
+                    const ignoreWords = ['ptu', 'podatek', 'vat', 'sprzedaż', 'sprzedaz', 'opodatkowana', 'reszta', 'nip', 'paragon', 'fiskalny', 'kasjer', 'nr ', 'kasa'];
+                    if (cleanName.length >= 3 && !ignoreWords.some(w => cleanName.toLowerCase().includes(w))) {
+                        const itemPrice = prices[prices.length - 1];
+                        detectedItems.push({ name: cleanName.slice(0, 45), price: itemPrice });
+                    }
+                }
+            }
+
+            const sortedUniqueAmounts = [...allAmountsSet].map(Number).sort((a, b) => b - a);
+            if (primaryTotal === null && sortedUniqueAmounts.length > 0) {
+                primaryTotal = sortedUniqueAmounts[0];
+            }
+
+            return {
+                storeName: detectedStore,
+                categoryId: detectedCategory,
+                totalAmount: primaryTotal !== null ? primaryTotal.toFixed(2) : '',
+                otherAmounts: sortedUniqueAmounts.slice(0, 6),
+                dateStr: detectedDate,
+                items: detectedItems.slice(0, 25)
+            };
+        }
+
+        function displayParsedReceiptResult(parsed, rawText, engineLabel) {
+            setScanProgress(100, `<i class="fa-solid fa-circle-check text-emerald-600"></i> Zakończono skanowanie (${engineLabel})`, 'Sprawdź odczytaną kwotę poniżej i zatwierdź.');
+
+            document.getElementById('scannedResultForm').classList.remove('hidden');
+            document.getElementById('detectedStoreBadge').textContent = engineLabel;
+            document.getElementById('scannedAmountInput').value = parsed.totalAmount || '';
+            document.getElementById('scannedNameInput').value = parsed.storeName || 'Zakupy z paragonu';
+            populateScannerCategorySelect(parsed.categoryId || 'food');
+
+            if (parsed.dateStr) {
+                document.getElementById('scannedDateInput').value = parsed.dateStr;
+            }
+
+            document.getElementById('rawOcrTextOutput').textContent = rawText || 'Brak surowego tekstu.';
+
+            // Render clickable chips of other detected numbers on the receipt
+            const chipsBox = document.getElementById('otherDetectedAmountsBox');
+            const chipsContainer = document.getElementById('otherDetectedAmountsChips');
+            if (parsed.otherAmounts && parsed.otherAmounts.length > 0) {
+                chipsBox.classList.remove('hidden');
+                chipsContainer.innerHTML = parsed.otherAmounts.map(val => {
+                    const fVal = Number(val).toFixed(2);
+                    return `<button type="button" onclick="document.getElementById('scannedAmountInput').value='${fVal}'" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-100 text-slate-800 hover:text-blue-800 font-num font-bold text-xs border border-slate-300 transition-colors">${fVal.replace('.', ',')} zł</button>`;
+                }).join('');
+            } else {
+                chipsBox.classList.add('hidden');
+            }
+
+            // Populate multi-items checklist if line items were detected
+            currentDetectedLineItems = parsed.items || [];
+            const modeWrapper = document.getElementById('scanImportModeWrapper');
+            const countSpan = document.getElementById('detectedItemsCount');
+            const checklist = document.getElementById('scannedItemsChecklist');
+
+            if (currentDetectedLineItems.length > 0) {
+                modeWrapper.classList.remove('hidden');
+                countSpan.textContent = String(currentDetectedLineItems.length);
+                checklist.innerHTML = currentDetectedLineItems.map((it, idx) => `
+                    <label class="flex items-center justify-between gap-2 p-2 rounded-lg bg-white border border-slate-200 cursor-pointer">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <input type="checkbox" checked data-item-idx="${idx}" class="scanned-item-checkbox rounded text-blue-600 w-4 h-4 accent-blue-600">
+                            <span class="font-semibold text-xs text-slate-800 truncate">${escapeHtml(it.name)}</span>
+                        </div>
+                        <span class="font-num font-bold text-xs text-rose-600 shrink-0">-${formatPLN(it.price)}</span>
+                    </label>
+                `).join('');
+            } else {
+                modeWrapper.classList.add('hidden');
+            }
+
+            setReceiptImportMode('single');
+        }
+
+        function setReceiptImportMode(mode) {
+            currentReceiptImportMode = mode;
+            const btnSingle = document.getElementById('btnImportModeSingle');
+            const btnItems = document.getElementById('btnImportModeItems');
+            const singleFields = document.getElementById('singleReceiptFields');
+            const multiFields = document.getElementById('multiItemsReceiptFields');
+
+            if (mode === 'single') {
+                btnSingle.className = 'py-1.5 px-2 rounded-lg font-bold text-xs bg-white text-slate-900 shadow-xs';
+                btnItems.className = 'py-1.5 px-2 rounded-lg font-semibold text-xs text-slate-600';
+                singleFields.classList.remove('hidden');
+                multiFields.classList.add('hidden');
+            } else {
+                btnItems.className = 'py-1.5 px-2 rounded-lg font-bold text-xs bg-white text-slate-900 shadow-xs';
+                btnSingle.className = 'py-1.5 px-2 rounded-lg font-semibold text-xs text-slate-600';
+                singleFields.classList.add('hidden');
+                multiFields.classList.remove('hidden');
+            }
+        }
+
+        function saveScannedReceiptExpense(e) {
+            e.preventDefault();
+            const categoryId = document.getElementById('scannedCategorySelect').value || 'food';
+            const dateVal = document.getElementById('scannedDateInput').value || getSelectedMonthDefaultDateStr('15');
+
+            // Automatically switch selected month/year to the receipt's date so the user immediately sees the added entry
+            if (dateVal && dateVal.includes('-')) {
+                const parts = dateVal.split('-');
+                const rYear = parseInt(parts[0], 10);
+                const rMonth = parseInt(parts[1], 10) - 1;
+                if (!isNaN(rYear) && !isNaN(rMonth)) {
+                    currentState.selectedYear = rYear;
+                    currentState.selectedMonth = rMonth;
+                    populateYearSelect();
+                }
+            }
+
+            if (currentReceiptImportMode === 'items' && currentDetectedLineItems.length > 0) {
+                const checkboxes = document.querySelectorAll('.scanned-item-checkbox:checked');
+                let addedCount = 0;
+                checkboxes.forEach(cb => {
+                    const idx = parseInt(cb.getAttribute('data-item-idx'), 10);
+                    const item = currentDetectedLineItems[idx];
+                    if (item && item.price > 0) {
+                        currentState.items.push({
+                            id: 'scan-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+                            categoryId,
+                            name: item.name,
+                            amount: parseFloat(item.price),
+                            sign: 'minus',
+                            mode: 'once',
+                            onceDate: dateVal,
+                            startDate: '',
+                            endDate: '',
+                            note: 'Zeskanowano z paragonu'
+                        });
+                        addedCount++;
+                    }
+                });
+                if (addedCount === 0) {
+                    showToast('Zaznacz przynajmniej jeden produkt z listy', 'error');
+                    return;
+                }
+                closeReceiptScannerModal();
+                switchTab('tables');
+                renderAll();
+                showToast(`Dodano ${addedCount} pozycji z paragonu!`, 'success');
+                return;
+            }
+
+            // Single total receipt mode
+            const amount = parseFloat(document.getElementById('scannedAmountInput').value);
+            const name = document.getElementById('scannedNameInput').value.trim() || 'Zakupy z paragonu';
+
+            if (isNaN(amount) || amount <= 0) {
+                showToast('Wpisz prawidłową kwotę z paragonu większą od 0', 'error');
+                return;
+            }
+
+            currentState.items.push({
+                id: 'scan-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+                categoryId,
+                name,
+                amount,
+                sign: 'minus',
+                mode: 'once',
+                onceDate: dateVal,
+                startDate: '',
+                endDate: '',
+                note: 'Zeskanowano aparatem z paragonu'
+            });
+
+            closeReceiptScannerModal();
+            switchTab('tables');
+            renderAll();
+            showToast(`Dodano paragon: ${name} (-${formatPLN(amount)})`, 'success');
         }
 
         // Initialize App on Load
